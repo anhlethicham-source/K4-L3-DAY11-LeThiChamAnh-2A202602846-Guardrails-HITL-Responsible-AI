@@ -43,16 +43,44 @@ class MonitoringAlert:
 
     def check_metrics(self) -> list[Alert]:
         """TODO: compute rates, append Alert objects when thresholds exceeded."""
-        raise NotImplementedError("Implement MonitoringAlert.check_metrics")
+        rates_block = self.blocked_requests / self.total_requests if self.total_requests else 0.0
+        rates_judge = self.judge_fails / self.judge_checks if self.judge_checks else 0.0
+        alert = []
+        if rates_block > self.block_rate_threshold:
+            alert.append(Alert(
+                metric="block_rate",
+                value=rates_block,
+                threshold=self.block_rate_threshold,
+                message=f"Block rate {rates_block:.2%} exceeds threshold {self.block_rate_threshold:.2%}"
+            ))
+        if self.rate_limit_hits > self.rate_limit_hit_threshold:
+            alert.append(Alert(
+                metric="rate_limit_hits",
+                value=self.rate_limit_hits,
+                threshold=self.rate_limit_hit_threshold,
+                message=f"Rate limit hits {self.rate_limit_hits} exceeds threshold {self.rate_limit_hit_threshold}"
+            ))
+        if rates_judge > self.judge_fail_rate_threshold:
+            alert.append(Alert(
+                metric="judge_fail_rate",
+                value=rates_judge,
+                threshold=self.judge_fail_rate_threshold,
+                message=f"Judge fail rate {rates_judge:.2%} exceeds threshold {self.judge_fail_rate_threshold:.2%}"
+            ))
+        self.alerts.extend(alert)
+        return alert
+
 
     def export_json(self, filepath: str | None = None):
         """TODO: write metrics + alerts to JSON under repo-root ``outputs/`` by default.
         Use ``filepath or default_metrics_path()`` so running from ``src/`` does not
         create ``src/outputs/``.
         """
-        _ = filepath or default_metrics_path()
-        raise NotImplementedError("Implement MonitoringAlert.export_json")
-
+        path = Path(filepath or default_metrics_path())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(self.snapshot(), f, indent=2, ensure_ascii=False)
+        return str(path)
     def snapshot(self) -> dict:
         block_rate = (
             self.blocked_requests / self.total_requests

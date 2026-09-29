@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2026-09-28T05:51:18.942669+00:00",
+    "request_id": null,
+    "user_id": "u1",
+    "input": "hi",
+    "output": "hello",
+    "blocked": false,
+    "layer": null,
+    "latency_ms": 0.03
+  }
+]

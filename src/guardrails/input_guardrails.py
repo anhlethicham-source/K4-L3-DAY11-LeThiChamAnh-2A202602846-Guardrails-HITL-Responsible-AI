@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import re
 from typing import Literal
-
+import unicodedata
 from google.genai import types
 from google.adk.plugins import base_plugin
 from google.adk.agents.invocation_context import InvocationContext
-
 from core.config import ALLOWED_TOPICS, BLOCKED_TOPICS
 
 # Quyết định rõ ràng — tránh đảo nghĩa True/False
@@ -51,14 +50,25 @@ def detect_injection(user_input: str) -> InputStatus:
     Returns:
         ``"BLOCK"`` if injection detected (chặn), ``"ALLOW"`` otherwise (cho qua).
     """
+    text = unicodedata.normalize("NFKC", user_input)
+    text = re.sub(r"[\u200b-\u200f\u2060\ufeff]", "", text)
+    text = re.sub(r"\s+", " ", text)
     INJECTION_PATTERNS = [
         # TODO: Add at least 5 regex patterns
         # Example:
         # r"ignore (all )?(previous|above) instructions",
+         r"ignore\s+(all\s+)?(previous|above)\s+instructions",
+        r"(ignore|disregard|override)\s+(all\s+)?(system|developer|assistant)\s+instructions",
+        r"\b(jailbreak|developer mode|DAN)\b",
+        r"you\s+are\s+now\b",
+        r"pretend\s+(that\s+)?you\s+are",
+        r"act\s+as\s+(a\s+|an\s+)?unrestricted",
+        r"system\s+prompt",
+        r"reveal\s+(your\s+)?(instructions|prompt)"
     ]
 
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             return "BLOCK"
     return "ALLOW"
 
@@ -91,7 +101,13 @@ def topic_filter(user_input: str) -> InputStatus:
     # 2. If input doesn't contain any allowed topic -> return "BLOCK"
     # 3. Otherwise -> return "ALLOW"
 
-    pass  # Replace with your implementation
+    if any(blocked_topic in input_lower for blocked_topic in BLOCKED_TOPICS):
+        return "BLOCK"
+    elif not any(allowed_topic in input_lower for allowed_topic in ALLOWED_TOPICS):
+        return "BLOCK"
+    else:
+        return "ALLOW"
+
 
 
 # ============================================================
@@ -151,7 +167,20 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         #    - If "BLOCK": increment blocked_count, return self._block_response("...")
         # 3. If both return "ALLOW": return None (let message through)
 
-        pass  # Replace with your implementation
+        if detect_injection(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response(
+                "Your message was blocked due to security concerns. "
+                "Please avoid instructions that attempt to override the system."
+            )
+        elif topic_filter(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response(
+                "Your message was blocked because it is off-topic. "
+                "Please ask about banking-related topics only."
+            )
+        else:
+            return None  # Message is safe, let it through
 
 
 # ============================================================
